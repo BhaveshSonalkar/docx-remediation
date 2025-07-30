@@ -105,54 +105,146 @@ def scan_document(document_id):
         
         # Hardcoded accessibility issues for prototype
         # In real implementation, this would call actual accessibility scanning service
+        # Comprehensive accessibility issues for prototype testing
         hardcoded_issues = [
             {
-                'clause': '1.4.3',
-                'description': 'The visual presentation of text and images of text has a contrast ratio of at least 4.5:1. Large-scale text and images of large-scale text have a contrast ratio of at least 3:1',
-                'details': [
-                    'Paragraph 2, Run 1: Text \'Some low contrast te...\' - Contrast ratio 1.53 < 4.5 required (size=11.0pt, bold=False, large=False, fg=rgb(209, 209, 209), bg=rgb(255, 255, 255))'
-                ],
-                'formatted': 'Specification: WCAG 2.2, Clause: 1.4.3, Test number: 1',
-                'principle_test_number': '1.4.3_1',
-                'specification': 'WCAG 2.2',
-                'status': 'Failed',
-                'test_number': '1',
-                'wcag_level': 'AA',
+                'id': str(uuid.uuid4()),
                 'document_id': document_id,
-                'id': str(uuid.uuid4())
+                'clause': 'WCAG 2.1 AA 1.4.3',
+                'description': 'Insufficient color contrast in document title',
+                'status': 'active',
+                'wcag_level': 'AA',
+                'details': {
+                    'contrast_ratio': 1.53,
+                    'required_ratio': 4.5,
+                    'foreground_color': '#C8C8C8',
+                    'background_color': '#FFFFFF',
+                    'original_content': 'Sample Document with Accessibility Issues',
+                    'element_xpath': '//w:p[1]/w:r[1]/w:t'
+                },
+                'element_xpath': '//w:p[1]/w:r[1]',
+                'is_fixed': False
             },
             {
-                'clause': '1.3.1',
-                'description': 'Information, structure, and relationships conveyed through presentation can be programmatically determined or are available in text',
-                'details': [
-                    'Heading structure violation: Found h3 element without preceding h2 element. Expected heading level: h2, Found heading level: h3'
-                ],
-                'formatted': 'Specification: WCAG 2.2, Clause: 1.3.1, Test number: 1',
-                'principle_test_number': '1.3.1_1',
-                'specification': 'WCAG 2.2',
-                'status': 'Failed',
-                'test_number': '1',
+                'id': str(uuid.uuid4()),
+                'document_id': document_id,
+                'clause': 'WCAG 2.1 A 1.3.1',
+                'description': 'Missing heading structure - paragraph should be a heading',
+                'status': 'active',
                 'wcag_level': 'A',
-                'document_id': document_id,
-                'id': str(uuid.uuid4())
+                'details': {
+                    'issue_type': 'heading_structure',
+                    'found_element': 'paragraph',
+                    'expected_element': 'heading',
+                    'original_content': 'This is a paragraph that should be a heading.',
+                    'element_xpath': '//w:p[2]/w:r[1]/w:t'
+                },
+                'element_xpath': '//w:p[2]',
+                'is_fixed': False
             },
             {
-                'clause': '2.4.6',
-                'description': 'Headings and labels describe topic or purpose',
-                'details': [
-                    'Heading \'Untitled Section\' lacks descriptive content. Consider using a more descriptive heading that clearly indicates the section content.'
-                ],
-                'formatted': 'Specification: WCAG 2.2, Clause: 2.4.6, Test number: 1',
-                'principle_test_number': '2.4.6_1',
-                'specification': 'WCAG 2.2',
-                'status': 'Failed',
-                'test_number': '1',
-                'wcag_level': 'AA',
+                'id': str(uuid.uuid4()),
                 'document_id': document_id,
-                'id': str(uuid.uuid4())
+                'clause': 'WCAG 2.1 A 1.3.1',
+                'description': 'Improper heading hierarchy - h3 without preceding h2',
+                'status': 'active',
+                'wcag_level': 'A',
+                'details': {
+                    'issue_type': 'heading_hierarchy',
+                    'found_level': 'h3',
+                    'expected_level': 'h2',
+                    'original_content': 'Subsection',
+                    'element_xpath': '//w:p[3]/w:r[1]/w:t'
+                },
+                'element_xpath': '//w:p[3]',
+                'is_fixed': False
+            },
+            {
+                'id': str(uuid.uuid4()),
+                'document_id': document_id,
+                'clause': 'WCAG 2.1 AA 1.4.3',
+                'description': 'Insufficient color contrast in body text',
+                'status': 'active',
+                'wcag_level': 'AA',
+                'details': {
+                    'contrast_ratio': 1.23,
+                    'required_ratio': 4.5,
+                    'foreground_color': '#B4B4B4',
+                    'background_color': '#FFFFFF',
+                    'original_content': 'This text has insufficient color contrast.',
+                    'element_xpath': '//w:p[4]/w:r[1]/w:t'
+                },
+                'element_xpath': '//w:p[4]/w:r[1]',
+                'is_fixed': False
+            },
+            {
+                'id': str(uuid.uuid4()),
+                'document_id': document_id,
+                'clause': 'WCAG 2.1 A 1.1.1',
+                'description': 'Missing alternative text for referenced image',
+                'status': 'active',
+                'wcag_level': 'A',
+                'details': {
+                    'issue_type': 'missing_alt_text',
+                    'reference_text': 'chart below',
+                    'original_content': 'Please refer to the chart below for more information.',
+                    'element_xpath': '//w:p[5]/w:r[1]/w:t'
+                },
+                'element_xpath': '//w:p[5]',
+                'is_fixed': False
+            },
+            {
+                'id': str(uuid.uuid4()),
+                'document_id': document_id,
+                'clause': 'WCAG 2.1 A 1.3.1',
+                'description': 'Table missing header row',
+                'status': 'active',
+                'wcag_level': 'A',
+                'details': {
+                    'issue_type': 'table_headers',
+                    'table_rows': 3,
+                    'table_columns': 3,
+                    'original_content': 'Data table without headers',
+                    'element_xpath': '//w:tbl[1]'
+                },
+                'element_xpath': '//w:tbl[1]',
+                'is_fixed': False
+            },
+            {
+                'id': str(uuid.uuid4()),
+                'document_id': document_id,
+                'clause': 'WCAG 2.1 A 2.4.4',
+                'description': 'Link text not descriptive - "here" is not meaningful',
+                'status': 'active',
+                'wcag_level': 'A',
+                'details': {
+                    'issue_type': 'link_text',
+                    'link_text': 'here',
+                    'context': 'Click here for more information.',
+                    'original_content': 'here',
+                    'element_xpath': '//w:p[6]/w:r[2]/w:t'
+                },
+                'element_xpath': '//w:p[6]/w:r[2]',
+                'is_fixed': False
+            },
+            {
+                'id': str(uuid.uuid4()),
+                'document_id': document_id,
+                'clause': 'WCAG 2.1 AA 1.4.4',
+                'description': 'Text too small to read without zooming',
+                'status': 'active',
+                'wcag_level': 'AA',
+                'details': {
+                    'issue_type': 'font_size',
+                    'current_size': '6pt',
+                    'minimum_size': '12pt',
+                    'original_content': 'This text is too small to read easily.',
+                    'element_xpath': '//w:p[7]/w:r[1]/w:t'
+                },
+                'element_xpath': '//w:p[7]/w:r[1]',
+                'is_fixed': False
             }
-        ]
-        
+        ]        
         # Store issues in memory
         for issue in hardcoded_issues:
             accessibility_issues[issue['id']] = issue
@@ -203,29 +295,69 @@ def suggest_fix(issue_id):
     
     # Hardcoded suggestions based on issue type
     suggestions = {
-        '1.4.3': {
-            'suggested_text': 'Change text color from rgb(209, 209, 209) to rgb(68, 68, 68) for better contrast',
+        'WCAG 2.1 AA 1.4.3': {
+            'suggested_text': 'Change text color from #C8C8C8 to #333333 for better contrast',
             'confidence': 0.95,
             'fix_type': 'color_change',
-            'old_value': 'rgb(209, 209, 209)',
-            'new_value': 'rgb(68, 68, 68)',
-            'element_xpath': '//w:p[2]/w:r[1]/w:rPr/w:color'
+            'old_value': '#C8C8C8',
+            'new_value': '#333333',
+            'element_xpath': '//w:p[1]/w:r[1]/w:rPr/w:color'
         },
-        '1.3.1': {
-            'suggested_text': 'Change heading level from h3 to h2 to maintain proper heading hierarchy',
+        'WCAG 2.1 A 1.3.1': {
+            'suggested_text': 'Convert paragraph to Heading 1 for proper document structure',
             'confidence': 0.88,
+            'fix_type': 'heading_structure_change',
+            'old_value': 'paragraph',
+            'new_value': 'heading',
+            'element_xpath': '//w:p[2]/w:pPr/w:pStyle'
+        },
+        'WCAG 2.1 A 1.3.1': {
+            'suggested_text': 'Change heading level from h3 to h2 to maintain proper hierarchy',
+            'confidence': 0.92,
             'fix_type': 'heading_level_change',
             'old_value': 'h3',
             'new_value': 'h2',
-            'element_xpath': '//w:p[1]/w:pPr/w:pStyle'
+            'element_xpath': '//w:p[3]/w:pPr/w:pStyle'
         },
-        '2.4.6': {
-            'suggested_text': 'Replace "Untitled Section" with "Project Overview" for better description',
-            'confidence': 0.92,
-            'fix_type': 'heading_text_change',
-            'old_value': 'Untitled Section',
-            'new_value': 'Project Overview',
-            'element_xpath': '//w:p[1]/w:r[1]/w:t'
+        'WCAG 2.1 AA 1.4.3': {
+            'suggested_text': 'Change text color from #B4B4B4 to #333333 for better contrast',
+            'confidence': 0.95,
+            'fix_type': 'color_change',
+            'old_value': '#B4B4B4',
+            'new_value': '#333333',
+            'element_xpath': '//w:p[4]/w:r[1]/w:rPr/w:color'
+        },
+        'WCAG 2.1 A 1.1.1': {
+            'suggested_text': 'Add "Annual Sales Chart" as alternative text for the referenced image',
+            'confidence': 0.85,
+            'fix_type': 'alt_text_addition',
+            'old_value': '',
+            'new_value': 'Annual Sales Chart',
+            'element_xpath': '//w:p[5]/w:r[1]/w:t'
+        },
+        'WCAG 2.1 A 1.3.1': {
+            'suggested_text': 'Add header row with "Column 1, Column 2, Column 3" to the table',
+            'confidence': 0.90,
+            'fix_type': 'table_header_addition',
+            'old_value': '',
+            'new_value': 'Column 1, Column 2, Column 3',
+            'element_xpath': '//w:tbl[1]/w:tr[1]'
+        },
+        'WCAG 2.1 A 2.4.4': {
+            'suggested_text': 'Change link text from "here" to "download the report" for better description',
+            'confidence': 0.87,
+            'fix_type': 'link_text_change',
+            'old_value': 'here',
+            'new_value': 'download the report',
+            'element_xpath': '//w:p[6]/w:r[2]/w:t'
+        },
+        'WCAG 2.1 AA 1.4.4': {
+            'suggested_text': 'Increase font size from 6pt to 12pt for better readability',
+            'confidence': 0.93,
+            'fix_type': 'font_size_change',
+            'old_value': '6pt',
+            'new_value': '12pt',
+            'element_xpath': '//w:p[7]/w:r[1]/w:rPr/w:sz'
         }
     }
     
