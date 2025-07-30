@@ -2,8 +2,10 @@ from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import os
 import uuid
+import shutil
 from datetime import datetime
 from werkzeug.utils import secure_filename
+from docx import Document
 
 app = Flask(__name__)
 CORS(app)
@@ -23,6 +25,216 @@ staged_changes = {}  # Add this for storing staged changes
 def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def create_backup(file_path):
+    """Create a backup of the original document"""
+    backup_path = file_path.replace('.docx', '_backup.docx')
+    if not os.path.exists(backup_path):
+        shutil.copy2(file_path, backup_path)
+    return backup_path
+
+def parse_xpath_index(xpath_part):
+    """Extract index from XPath part like 'w:p[2]' -> 2"""
+    if '[' in xpath_part and ']' in xpath_part:
+        index_str = xpath_part.split('[')[1].split(']')[0]
+        return int(index_str) - 1  # Convert to 0-based index
+    return 0
+
+def find_element_by_xpath(doc, element_xpath):
+    """Find document element using XPath-like selector"""
+    if not element_xpath:
+        return None
+    
+    try:
+        # Parse common DOCX XPath patterns
+        # Examples: //w:p[1], //w:p[2]/w:r[1], //w:tbl[1], //w:tbl[1]/w:tr[1]/w:tc[2]
+        
+        if '//w:p[' in element_xpath:
+            # Paragraph element
+            paragraph_match = element_xpath.split('//w:p[')[1].split(']')[0]
+            paragraph_index = int(paragraph_match) - 1  # Convert to 0-based
+            
+            if paragraph_index < len(doc.paragraphs):
+                paragraph = doc.paragraphs[paragraph_index]
+                
+                # Check if it's targeting a specific run within the paragraph
+                if '/w:r[' in element_xpath:
+                    run_match = element_xpath.split('/w:r[')[1].split(']')[0]
+                    run_index = int(run_match) - 1
+                    if run_index < len(paragraph.runs):
+                        return paragraph.runs[run_index]
+                
+                return paragraph
+        
+        elif '//w:tbl[' in element_xpath:
+            # Table element
+            table_match = element_xpath.split('//w:tbl[')[1].split(']')[0]
+            table_index = int(table_match) - 1  # Convert to 0-based
+            
+            if table_index < len(doc.tables):
+                table = doc.tables[table_index]
+                
+                # Check if it's targeting a specific row/cell
+                if '/w:tr[' in element_xpath:
+                    row_match = element_xpath.split('/w:tr[')[1].split(']')[0]
+                    row_index = int(row_match) - 1
+                    
+                    if row_index < len(table.rows):
+                        row = table.rows[row_index]
+                        
+                        if '/w:tc[' in element_xpath:
+                            cell_match = element_xpath.split('/w:tc[')[1].split(']')[0]
+                            cell_index = int(cell_match) - 1
+                            
+                            if cell_index < len(row.cells):
+                                return row.cells[cell_index]
+                        
+                        return row
+                
+                return table
+        
+        return None
+        
+    except (ValueError, IndexError) as e:
+        print(f"Error parsing XPath '{element_xpath}': {e}")
+        return None
+
+def find_element_by_content(doc, target_content, element_type='paragraph'):
+    """Find document element by content text (fallback method)"""
+    target_content = target_content.strip()
+    
+    if element_type == 'paragraph':
+        for paragraph in doc.paragraphs:
+            if paragraph.text.strip() == target_content:
+                return paragraph
+            # Also check for partial matches in case of formatting
+            if target_content in paragraph.text:
+                return paragraph
+    
+    elif element_type == 'heading':
+        for paragraph in doc.paragraphs:
+            if paragraph.style.name.startswith('Heading') and paragraph.text.strip() == target_content:
+                return paragraph
+    
+    elif element_type == 'table_cell':
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    if cell.text.strip() == target_content:
+                        return cell
+    
+    return None
+
+def modify_document_element(doc, original_content, new_content, element_xpath=None):
+    """Modify a document element with new content using XPath when available"""
+    try:
+        element = None
+        
+        # First, try to find element using XPath if provided
+        if element_xpath:
+            element = find_element_by_xpath(doc, element_xpath)
+            print(f"XPath '{element_xpath}' -> Found element: {type(element).__name__ if element else 'None'}")
+        
+        # If XPath didn't work, fall back to content-based matching
+        if not element:
+            print(f"Falling back to content-based search for: '{original_content[:50]}...'")
+            
+            # Try to find the element by content
+            element = find_element_by_content(doc, original_content, 'paragraph')
+            
+            if not element:
+                # Try finding in headings
+                element = find_element_by_content(doc, original_content, 'heading')
+            
+            if not element:
+                # Try finding in table cells
+                element = find_element_by_content(doc, original_content, 'table_cell')
+        
+        # Modify the element if found
+        if element:
+            element_type = type(element).__name__
+            print(f"Modifying {element_type}: '{original_content[:30]}...' -> '{new_content[:30]}...'")
+            
+            if hasattr(element, 'clear') and hasattr(element, 'add_run'):
+                # Paragraph or Run element
+                element.clear()
+                element.add_run(new_content)
+                return True
+            elif hasattr(element, 'text'):
+                # Table cell or other text element
+                element.text = new_content
+                return True
+            elif hasattr(element, '_element'):
+                # Handle run elements specifically
+                if element_type == 'Run':
+                    element.text = new_content
+                    return True
+                # For paragraph-like elements with runs
+                elif hasattr(element, 'runs') and element.runs:
+                    # Clear existing runs and add new content
+                    for run in element.runs:
+                        run.clear()
+                    element.runs[0].text = new_content if element.runs else element.add_run(new_content)
+                    return True
+            
+            print(f"Warning: Don't know how to modify element type: {element_type}")
+            return False
+        
+        print(f"Element not found for content: '{original_content[:50]}...'")
+        return False
+        
+    except Exception as e:
+        print(f"Error modifying element: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+def apply_changes_to_docx(file_path, changes):
+    """Apply multiple changes to a DOCX document"""
+    try:
+        # Create backup first
+        backup_path = create_backup(file_path)
+        
+        # Load the document
+        doc = Document(file_path)
+        
+        applied_changes = []
+        failed_changes = []
+        
+        for change in changes:
+            original_content = change['original_content']
+            new_content = change['new_content']
+            element_xpath = change.get('element_xpath', '')
+            
+            success = modify_document_element(doc, original_content, new_content, element_xpath)
+            
+            if success:
+                applied_changes.append(change['id'])
+            else:
+                failed_changes.append({
+                    'change_id': change['id'],
+                    'reason': 'Element not found or could not be modified'
+                })
+        
+        # Save the modified document
+        doc.save(file_path)
+        
+        return {
+            'success': True,
+            'applied_changes': applied_changes,
+            'failed_changes': failed_changes,
+            'backup_path': backup_path,
+            'total_applied': len(applied_changes),
+            'total_failed': len(failed_changes)
+        }
+        
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e),
+            'applied_changes': [],
+            'failed_changes': [{'change_id': change['id'], 'reason': str(e)} for change in changes]
+        }
 
 @app.route('/api/documents/upload', methods=['POST'])
 def upload_document():
@@ -374,6 +586,46 @@ def suggest_fix(issue_id):
         'element_xpath': suggestion['element_xpath']
     })
 
+def calculate_diff(original, new_content):
+    """Calculate detailed diff between original and new content"""
+    if not original and not new_content:
+        return {'type': 'no_change', 'changes': []}
+    
+    # Simple line-by-line comparison for prototype
+    original_lines = original.split('\n') if original else ['']
+    new_lines = new_content.split('\n') if new_content else ['']
+    
+    changes = []
+    max_lines = max(len(original_lines), len(new_lines))
+    
+    for i in range(max_lines):
+        original_line = original_lines[i] if i < len(original_lines) else ''
+        new_line = new_lines[i] if i < len(new_lines) else ''
+        
+        if original_line != new_line:
+            change = {
+                'line_number': i + 1,
+                'type': 'modified' if original_line and new_line else ('added' if new_line else 'deleted'),
+                'original': original_line,
+                'new': new_line
+            }
+            changes.append(change)
+    
+    return {
+        'type': 'text_change',
+        'changes': changes,
+        'summary': {
+            'total_changes': len(changes),
+            'added_lines': len([c for c in changes if c['type'] == 'added']),
+            'deleted_lines': len([c for c in changes if c['type'] == 'deleted']),
+            'modified_lines': len([c for c in changes if c['type'] == 'modified'])
+        },
+        'preview': {
+            'original': original[:100] + '...' if len(original) > 100 else original,
+            'new': new_content[:100] + '...' if len(new_content) > 100 else new_content
+        }
+    }
+
 @app.route('/api/issues/<issue_id>/stage-change', methods=['POST'])
 def stage_change(issue_id):
     """Stage a fix for an issue"""
@@ -384,13 +636,42 @@ def stage_change(issue_id):
     if not data or 'new_content' not in data:
         return jsonify({'error': 'new_content is required'}), 400
     
+    # Validate content
+    new_content = data['new_content'].strip()
+    if not new_content:
+        return jsonify({'error': 'new_content cannot be empty'}), 400
+    
     try:
         # Generate change ID
         change_id = str(uuid.uuid4())
         
-        # Get original content from issue
+        # Get original content from issue - handle different data structures
         issue = accessibility_issues[issue_id]
-        original_content = issue.get('details', [''])[0] if issue.get('details') else ''
+        original_content = ''
+        
+        if isinstance(issue.get('details'), dict):
+            original_content = issue['details'].get('original_content', '') or issue['details'].get('content', '')
+        elif isinstance(issue.get('details'), list) and issue['details']:
+            original_content = issue['details'][0]
+        else:
+            original_content = issue.get('description', '')
+        
+        # Check for duplicate staging of same content
+        existing_changes = [
+            change for change in staged_changes.values()
+            if (change['issue_id'] == issue_id and 
+                change['new_content'] == new_content and 
+                change['status'] == 'staged')
+        ]
+        
+        if existing_changes:
+            return jsonify({
+                'error': 'This change is already staged',
+                'existing_change_id': existing_changes[0]['id']
+            }), 409
+        
+        # Calculate detailed diff
+        diff = calculate_diff(original_content, new_content)
         
         # Create staged change
         staged_changes[change_id] = {
@@ -398,23 +679,21 @@ def stage_change(issue_id):
             'issue_id': issue_id,
             'document_id': issue['document_id'],
             'original_content': original_content,
-            'new_content': data['new_content'],
+            'new_content': new_content,
             'change_type': data.get('change_type', 'manual'),
+            'element_xpath': issue.get('element_xpath', ''),  # Pass XPath from issue
             'created_at': datetime.now().isoformat(),
-            'status': 'staged'
-        }
-        
-        # Calculate simple diff (for prototype)
-        diff = {
-            'type': 'text_change',
-            'original': original_content[:50] + '...' if len(original_content) > 50 else original_content,
-            'modified': data['new_content'][:50] + '...' if len(data['new_content']) > 50 else data['new_content']
+            'status': 'staged',
+            'diff': diff
         }
         
         return jsonify({
             'change_id': change_id,
+            'issue_id': issue_id,
+            'document_id': issue['document_id'],
             'diff': diff,
-            'status': 'staged'
+            'status': 'staged',
+            'created_at': staged_changes[change_id]['created_at']
         }), 201
         
     except Exception as e:
@@ -422,45 +701,148 @@ def stage_change(issue_id):
 
 @app.route('/api/documents/<document_id>/apply-changes', methods=['POST'])
 def apply_changes(document_id):
-    """Apply all staged changes to document (hardcoded for prototype)"""
+    """Apply all staged changes to document"""
     if document_id not in documents:
         return jsonify({'error': 'Document not found'}), 404
     
+    # Optional: Allow applying specific changes via request body
+    data = request.get_json() or {}
+    specific_change_ids = data.get('change_ids', [])
+    
     try:
         # Get all staged changes for this document
-        document_changes = [
-            change for change in staged_changes.values() 
-            if change['document_id'] == document_id and change['status'] == 'staged'
-        ]
+        if specific_change_ids:
+            document_changes = [
+                change for change in staged_changes.values() 
+                if (change['document_id'] == document_id and 
+                    change['status'] == 'staged' and 
+                    change['id'] in specific_change_ids)
+            ]
+        else:
+            document_changes = [
+                change for change in staged_changes.values() 
+                if change['document_id'] == document_id and change['status'] == 'staged'
+            ]
         
         if not document_changes:
-            return jsonify({'error': 'No staged changes found for this document'}), 400
+            error_msg = 'No staged changes found for this document'
+            if specific_change_ids:
+                error_msg = 'No matching staged changes found for the specified change IDs'
+            return jsonify({'error': error_msg}), 400
         
-        # Generate new document ID for updated version
+        # Validate that all changes are still valid
+        invalid_changes = []
+        for change in document_changes:
+            if change['issue_id'] not in accessibility_issues:
+                invalid_changes.append({
+                    'change_id': change['id'],
+                    'reason': 'Associated issue no longer exists'
+                })
+        
+        if invalid_changes:
+            return jsonify({
+                'error': 'Some changes cannot be applied',
+                'invalid_changes': invalid_changes
+            }), 400
+        
+        # Get the document file path
+        document = documents[document_id]
+        file_path = document['file_path']
+        
+        # Apply changes to the actual DOCX file
+        docx_result = apply_changes_to_docx(file_path, document_changes)
+        
+        if not docx_result['success']:
+            return jsonify({
+                'error': 'Failed to apply changes to document',
+                'details': docx_result.get('error', 'Unknown error'),
+                'failed_changes': docx_result.get('failed_changes', [])
+            }), 500
+        
+        # Generate new document ID for updated version (for tracking)
         updated_document_id = str(uuid.uuid4())
+        applied_timestamp = datetime.now().isoformat()
         
-        # In a real implementation, this would:
-        # 1. Load the original DOCX file
-        # 2. Apply XML changes based on element_xpath
-        # 3. Save as new document
-        # For prototype, we'll just mark changes as applied
+        # Update staged changes status based on actual DOCX modification results
+        successfully_applied = docx_result['applied_changes']
+        failed_to_apply = docx_result['failed_changes']
         
         applied_changes = []
+        change_summaries = []
+        
         for change in document_changes:
-            change['status'] = 'applied'
-            change['applied_at'] = datetime.now().isoformat()
-            applied_changes.append(change['id'])
+            if change['id'] in successfully_applied:
+                change['status'] = 'applied'
+                change['applied_at'] = applied_timestamp
+                applied_changes.append(change['id'])
+                
+                # Create summary for response
+                change_summaries.append({
+                    'change_id': change['id'],
+                    'issue_id': change['issue_id'],
+                    'change_type': change['change_type'],
+                    'diff_summary': change.get('diff', {}).get('summary', {}),
+                    'applied_at': applied_timestamp,
+                    'status': 'success'
+                })
+                
+                # Mark associated issue as fixed
+                if change['issue_id'] in accessibility_issues:
+                    accessibility_issues[change['issue_id']]['is_fixed'] = True
+                    accessibility_issues[change['issue_id']]['fixed_at'] = applied_timestamp
+            else:
+                # Change failed to apply
+                change['status'] = 'failed'
+                change['failed_at'] = applied_timestamp
+                
+                # Find the failure reason
+                failure_reason = 'Unknown error'
+                for failed_change in failed_to_apply:
+                    if failed_change['change_id'] == change['id']:
+                        failure_reason = failed_change['reason']
+                        break
+                
+                change_summaries.append({
+                    'change_id': change['id'],
+                    'issue_id': change['issue_id'],
+                    'change_type': change['change_type'],
+                    'status': 'failed',
+                    'error': failure_reason,
+                    'failed_at': applied_timestamp
+                })
         
         # Update document status
         documents[document_id]['status'] = 'remediated'
-        documents[document_id]['remediated_at'] = datetime.now().isoformat()
+        documents[document_id]['remediated_at'] = applied_timestamp
         documents[document_id]['applied_changes'] = applied_changes
         
+        # Calculate remediation statistics
+        total_issues = len([issue for issue in accessibility_issues.values() 
+                           if issue['document_id'] == document_id])
+        fixed_issues = len([issue for issue in accessibility_issues.values() 
+                           if issue['document_id'] == document_id and issue.get('is_fixed', False)])
+        
         return jsonify({
+            'success': True,
             'updated_document_id': updated_document_id,
-            'applied_changes': applied_changes,
+            'applied_changes': change_summaries,
             'total_changes': len(applied_changes),
-            'status': 'success'
+            'docx_modification': {
+                'file_modified': True,
+                'backup_created': docx_result.get('backup_path') is not None,
+                'backup_path': docx_result.get('backup_path'),
+                'successfully_applied': len(successfully_applied),
+                'failed_to_apply': len(failed_to_apply),
+                'modification_details': docx_result
+            },
+            'remediation_stats': {
+                'total_issues': total_issues,
+                'fixed_issues': fixed_issues,
+                'completion_rate': round((fixed_issues / total_issues * 100), 2) if total_issues > 0 else 0
+            },
+            'document_status': 'remediated',
+            'applied_at': applied_timestamp,
+            'message': f'Successfully applied {len(successfully_applied)} changes to the DOCX document. {len(failed_to_apply)} changes failed to apply.' if failed_to_apply else f'Successfully applied all {len(successfully_applied)} changes to the DOCX document.'
         })
         
     except Exception as e:
@@ -490,17 +872,156 @@ def cancel_staged_change(change_id):
 
 @app.route('/api/changes/<document_id>', methods=['GET'])
 def get_staged_changes(document_id):
-    """Get all staged changes for a document (bonus endpoint)"""
+    """Get all staged changes for a document"""
     if document_id not in documents:
         return jsonify({'error': 'Document not found'}), 404
     
-    # Filter staged changes for this document
+    # Filter changes for this document
     document_changes = [
         change for change in staged_changes.values() 
         if change['document_id'] == document_id
     ]
     
-    return jsonify(document_changes)
+    # Separate by status
+    staged_changes_list = [c for c in document_changes if c['status'] == 'staged']
+    applied_changes_list = [c for c in document_changes if c['status'] == 'applied']
+    
+    return jsonify({
+        'document_id': document_id,
+        'staged_changes': staged_changes_list,
+        'applied_changes': applied_changes_list,
+        'summary': {
+            'total_changes': len(document_changes),
+            'staged_count': len(staged_changes_list),
+            'applied_count': len(applied_changes_list)
+        }
+    })
+
+@app.route('/api/changes/<document_id>/clear', methods=['POST'])
+def clear_staged_changes(document_id):
+    """Clear all staged changes for a document"""
+    if document_id not in documents:
+        return jsonify({'error': 'Document not found'}), 404
+    
+    try:
+        # Find all staged changes for this document
+        changes_to_remove = [
+            change_id for change_id, change in staged_changes.items()
+            if change['document_id'] == document_id and change['status'] == 'staged'
+        ]
+        
+        # Remove the changes
+        for change_id in changes_to_remove:
+            del staged_changes[change_id]
+        
+        return jsonify({
+            'success': True,
+            'cleared_changes': len(changes_to_remove),
+            'message': f'Cleared {len(changes_to_remove)} staged changes'
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/changes/<change_id>/preview', methods=['GET'])
+def preview_change(change_id):
+    """Get detailed preview of a specific change"""
+    if change_id not in staged_changes:
+        return jsonify({'error': 'Change not found'}), 404
+    
+    try:
+        change = staged_changes[change_id]
+        
+        # Get associated issue details
+        issue = accessibility_issues.get(change['issue_id'], {})
+        
+        return jsonify({
+            'change': change,
+            'issue_context': {
+                'id': issue.get('id'),
+                'clause': issue.get('clause'),
+                'description': issue.get('description'),
+                'wcag_level': issue.get('wcag_level'),
+                'element_xpath': issue.get('element_xpath')
+            },
+            'diff_details': change.get('diff', {}),
+            'can_apply': change['status'] == 'staged'
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/documents/<document_id>/download', methods=['GET'])
+def download_modified_document(document_id):
+    """Download the modified DOCX document"""
+    if document_id not in documents:
+        return jsonify({'error': 'Document not found'}), 404
+    
+    try:
+        document = documents[document_id]
+        file_path = document['file_path']
+        filename = document['filename']
+        
+        # Add 'modified' to filename if document has been remediated
+        if document.get('status') == 'remediated':
+            name_parts = filename.rsplit('.', 1)
+            modified_filename = f"{name_parts[0]}_modified.{name_parts[1]}"
+        else:
+            modified_filename = filename
+        
+        return send_file(
+            file_path,
+            as_attachment=True,
+            download_name=modified_filename,
+            mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        )
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/documents/<document_id>/restore', methods=['POST'])
+def restore_document_backup(document_id):
+    """Restore document from backup"""
+    if document_id not in documents:
+        return jsonify({'error': 'Document not found'}), 404
+    
+    try:
+        document = documents[document_id]
+        file_path = document['file_path']
+        backup_path = file_path.replace('.docx', '_backup.docx')
+        
+        if not os.path.exists(backup_path):
+            return jsonify({'error': 'No backup found for this document'}), 404
+        
+        # Restore from backup
+        shutil.copy2(backup_path, file_path)
+        
+        # Reset document status
+        documents[document_id]['status'] = 'ready'
+        documents[document_id]['restored_at'] = datetime.now().isoformat()
+        
+        # Reset associated issues
+        for issue_id, issue in accessibility_issues.items():
+            if issue['document_id'] == document_id:
+                issue['is_fixed'] = False
+                if 'fixed_at' in issue:
+                    del issue['fixed_at']
+        
+        # Reset staged changes for this document
+        for change_id, change in list(staged_changes.items()):
+            if change['document_id'] == document_id and change['status'] == 'applied':
+                change['status'] = 'reverted'
+                change['reverted_at'] = datetime.now().isoformat()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Document restored from backup successfully',
+            'document_status': 'ready',
+            'restored_at': documents[document_id]['restored_at']
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
