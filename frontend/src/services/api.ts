@@ -21,7 +21,15 @@ export const documentApi = {
         'Content-Type': 'multipart/form-data',
       },
     });
-    return response.data;
+    // Map backend upload response to frontend Document interface
+    const { document_id, filename, status } = response.data;
+    return {
+      id: document_id,
+      filename,
+      status,
+      file_path: '',
+      upload_date: new Date().toISOString(),
+    };
   },
 
   // Get all documents
