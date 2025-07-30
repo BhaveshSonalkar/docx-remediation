@@ -13,6 +13,7 @@ export interface AccessibilityIssue {
   description: string;
   status: string;
   wcag_level: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   details: Record<string, any>;
   element_xpath: string;
   is_fixed: boolean;
@@ -32,12 +33,6 @@ export interface ApiResponse<T> {
   data?: T;
   error?: string;
   status: number;
-}
-
-export interface DocumentRenderResponse {
-  html_content: string;
-  messages: string[];
-  document_id: string;
 }
 
 export interface ScanResponse {

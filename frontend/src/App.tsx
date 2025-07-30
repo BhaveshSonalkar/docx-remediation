@@ -101,8 +101,9 @@ function App() {
               <Grid item xs={12} md={6}>
                 <DocumentViewer 
                   document={currentDocument}
-                  onDocumentRendered={(htmlContent) => {
-                    console.log('Document rendered:', htmlContent.length, 'characters');
+                  selectedIssue={selectedIssue}
+                  onDocumentRendered={() => {
+                    console.log('Document rendered successfully');
                   }}
                 />
               </Grid>

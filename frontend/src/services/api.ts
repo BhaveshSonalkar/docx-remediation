@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Document, AccessibilityIssue, DocumentRenderResponse, ScanResponse } from '../types';
+import type { Document, AccessibilityIssue, ScanResponse } from '../types';
 
 const API_BASE_URL = 'http://localhost:5000/api';
 
@@ -38,9 +38,11 @@ export const documentApi = {
     return response.data;
   },
 
-  // Render document to HTML
-  render: async (documentId: string): Promise<DocumentRenderResponse> => {
-    const response = await api.get(`/documents/${documentId}/render`);
+  // Get document file as ArrayBuffer for docx-preview
+  getDocumentFile: async (documentId: string): Promise<ArrayBuffer> => {
+    const response = await api.get(`/documents/${documentId}/file`, {
+      responseType: 'arraybuffer',
+    });
     return response.data;
   },
 

@@ -15,6 +15,7 @@
     "@mui/icons-material": "^5.15.0",
     "@mui/material": "^5.15.0",
     "axios": "^1.6.0",
+    "docx-preview": "^0.3.6",
     "mammoth": "^1.6.0",
     "react": "^19.1.0",
     "react-diff-viewer-continued": "^3.4.0",

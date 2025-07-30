@@ -1,16 +1,15 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import os
 import uuid
 from datetime import datetime
-import mammoth
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 CORS(app)
 
 # Configuration
-UPLOAD_FOLDER = 'uploads'
+UPLOAD_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), '.', 'uploads'))
 ALLOWED_EXTENSIONS = {'docx'}
 
 # Ensure upload directory exists
@@ -65,9 +64,9 @@ def upload_document():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/documents/<document_id>/render', methods=['GET'])
-def render_document(document_id):
-    """Convert DOCX to HTML using mammoth"""
+@app.route('/api/documents/<document_id>/file', methods=['GET'])
+def get_document_file(document_id):
+    """Return the original DOCX file for client-side rendering"""
     if document_id not in documents:
         return jsonify({'error': 'Document not found'}), 404
     
@@ -75,20 +74,14 @@ def render_document(document_id):
         document = documents[document_id]
         file_path = document['file_path']
         
-        # Convert DOCX to HTML using mammoth
-        with open(file_path, "rb") as docx_file:
-            result = mammoth.convert_to_html(docx_file)
-            html_content = result.value
-            messages = result.messages
-        
-        # Update document status
+        # Update document status to ready when file is accessed
         documents[document_id]['status'] = 'ready'
         
-        return jsonify({
-            'html_content': html_content,
-            'messages': [str(msg) for msg in messages],
-            'document_id': document_id
-        })
+        return send_file(
+            file_path,
+            as_attachment=False,
+            mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        )
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
