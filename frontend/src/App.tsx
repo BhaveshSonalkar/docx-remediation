@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   ThemeProvider,
   CssBaseline,
@@ -142,6 +142,10 @@ function App() {
     }
   };
 
+  const handleDocumentRendered = useCallback(() => {
+    console.log('Document rendered successfully');
+  }, []);
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -177,9 +181,7 @@ function App() {
                 <DocumentViewer 
                   document={currentDocument}
                   selectedIssue={selectedIssue}
-                  onDocumentRendered={() => {
-                    console.log('Document rendered successfully');
-                  }}
+                  onDocumentRendered={handleDocumentRendered}
                 />
               </Grid>
 
