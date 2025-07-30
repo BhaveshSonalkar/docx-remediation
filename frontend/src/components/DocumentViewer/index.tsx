@@ -51,9 +51,13 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
       // - w:p elements as <p> tags
       // - w:r elements as <span> tags  
       // - w:t elements contain the text content
+      // - w:tbl elements as <table> tags
+      
+      // Pattern: //w:tbl[n] -> table:nth-of-type(n) (handle tables first)
+      let selector = xpath.replace(/\/\/w:tbl\[(\d+)\]/g, 'table:nth-of-type($1)');
       
       // Pattern: //w:p[n] -> p:nth-of-type(n)
-      let selector = xpath.replace(/\/\/w:p\[(\d+)\]/g, 'p:nth-of-type($1)');
+      selector = selector.replace(/\/\/w:p\[(\d+)\]/g, 'p:nth-of-type($1)');
       
       // Pattern: //w:p[n]/w:r[m] -> p:nth-of-type(n) span:nth-of-type(m)
       selector = selector.replace(/\/w:r\[(\d+)\]/g, ' span:nth-of-type($1)');
@@ -61,8 +65,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
       // Pattern: //w:p[n]/w:r[m]/w:t -> p:nth-of-type(n) span:nth-of-type(m)
       selector = selector.replace(/\/w:t/g, '');
       
-      // Handle table patterns: //w:tbl[n]/w:tr[m]/w:tc[k]/w:p[l]
-      selector = selector.replace(/\/\/w:tbl\[(\d+)\]/g, 'table:nth-of-type($1)');
+      // Handle table sub-patterns: /w:tr[m]/w:tc[k]/w:p[l]
       selector = selector.replace(/\/w:tr\[(\d+)\]/g, ' tr:nth-of-type($1)');
       selector = selector.replace(/\/w:tc\[(\d+)\]/g, ' td:nth-of-type($1)');
       
