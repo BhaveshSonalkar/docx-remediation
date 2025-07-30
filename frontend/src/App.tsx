@@ -16,6 +16,7 @@ import { DocumentViewer } from './components/DocumentViewer';
 import { IssuePanel } from './components/IssuePanel';
 import { IssueDetail } from './components/IssueDetail';
 import { StagedChangesBar } from './components/StagedChangesBar';
+import { issuesApi, changesApi } from './services/api';
 import type { Document, AccessibilityIssue, StagedChange } from './types';
 
 function App() {
@@ -34,37 +35,98 @@ function App() {
     setSelectedIssue(issue);
   };
 
-  const handleFixSave = (issueId: string, newContent: string) => {
+  const handleFixSave = async (issueId: string, newContent: string, changeType: 'manual' | 'suggested' = 'manual') => {
     const issue = selectedIssue;
-    if (!issue) return;
+    if (!issue || !currentDocument) return;
 
-    const change: StagedChange = {
-      id: `change_${Date.now()}`,
-      issue_id: issueId,
-      original_content: issue.details.original_content || '',
-      new_content: newContent,
-      change_type: 'manual',
-      created_at: new Date().toISOString(),
-    };
+    try {
+      // Stage the change with the backend
+      const stagedChange = await issuesApi.stageChange(issueId, newContent, changeType);
+      
+      // Create local staged change object
+      const change: StagedChange = {
+        id: stagedChange.change_id,
+        issue_id: issueId,
+        original_content: issue.details.original_content || '',
+        new_content: newContent,
+        change_type: changeType,
+        created_at: stagedChange.created_at,
+      };
 
-    setStagedChanges(prev => [...prev, change]);
+      setStagedChanges(prev => [...prev, change]);
+      
+      // Show success feedback (optional)
+      console.log('Change staged successfully:', stagedChange);
+      
+    } catch (error) {
+      console.error('Failed to stage change:', error);
+      // You could add error handling UI here
+    }
   };
 
   const handleApplyChanges = async () => {
+    if (!currentDocument) return;
+
     setIsApplyingChanges(true);
-    // TODO: Implement backend call to apply changes
-    setTimeout(() => {
+    
+    try {
+      // Apply all staged changes to the document
+      const result = await changesApi.applyChanges(currentDocument.id);
+      
+      if (result.success) {
+        // Clear staged changes on successful application
+        setStagedChanges([]);
+        
+        // Show success message
+        console.log('Changes applied successfully:', result.message);
+        console.log('DOCX file modified:', result.docx_modification);
+        console.log('Remediation stats:', result.remediation_stats);
+        
+        // You could show a success toast/notification here
+      } else {
+        console.error('Failed to apply changes:', result);
+      }
+      
+    } catch (error) {
+      console.error('Error applying changes:', error);
+      // You could show an error toast/notification here
+    } finally {
       setIsApplyingChanges(false);
+    }
+  };
+
+  const handleClearChanges = async () => {
+    if (!currentDocument) return;
+
+    try {
+      // Clear staged changes on the backend
+      await changesApi.clearStagedChanges(currentDocument.id);
+      
+      // Clear local staged changes
       setStagedChanges([]);
-    }, 2000);
+      
+      console.log('All staged changes cleared');
+    } catch (error) {
+      console.error('Failed to clear staged changes:', error);
+      // Still clear local changes even if backend fails
+      setStagedChanges([]);
+    }
   };
 
-  const handleClearChanges = () => {
-    setStagedChanges([]);
-  };
-
-  const handleRemoveChange = (changeId: string) => {
-    setStagedChanges(prev => prev.filter(change => change.id !== changeId));
+  const handleRemoveChange = async (changeId: string) => {
+    try {
+      // Remove staged change from backend
+      await changesApi.removeChange(changeId);
+      
+      // Remove from local state
+      setStagedChanges(prev => prev.filter(change => change.id !== changeId));
+      
+      console.log('Staged change removed:', changeId);
+    } catch (error) {
+      console.error('Failed to remove staged change:', error);
+      // Still remove locally even if backend fails
+      setStagedChanges(prev => prev.filter(change => change.id !== changeId));
+    }
   };
 
   return (

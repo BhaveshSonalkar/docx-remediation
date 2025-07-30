@@ -6,6 +6,7 @@ import shutil
 from datetime import datetime
 from werkzeug.utils import secure_filename
 from docx import Document
+from hardcoded_snippets import get_hardcoded_snippets
 
 app = Flask(__name__)
 CORS(app)
@@ -498,85 +499,115 @@ def suggest_fix(issue_id):
     
     issue = accessibility_issues[issue_id]
     
-    # Hardcoded suggestions based on issue type
-    suggestions = {
-        'WCAG 2.1 AA 1.4.3': {
-            'suggested_text': 'Change text color from #C8C8C8 to #333333 for better contrast',
-            'confidence': 0.95,
-            'fix_type': 'color_change',
-            'old_value': '#C8C8C8',
-            'new_value': '#333333',
-            'element_xpath': '//w:p[1]/w:r[1]/w:rPr/w:color'
-        },
-        'WCAG 2.1 A 1.3.1': {
-            'suggested_text': 'Convert paragraph to Heading 1 for proper document structure',
-            'confidence': 0.88,
-            'fix_type': 'heading_structure_change',
-            'old_value': 'paragraph',
-            'new_value': 'heading',
-            'element_xpath': '//w:p[2]/w:pPr/w:pStyle'
-        },
-        'WCAG 2.1 A 1.3.1': {
-            'suggested_text': 'Change heading level from h3 to h2 to maintain proper hierarchy',
-            'confidence': 0.92,
-            'fix_type': 'heading_level_change',
-            'old_value': 'h3',
-            'new_value': 'h2',
-            'element_xpath': '//w:p[3]/w:pPr/w:pStyle'
-        },
-        'WCAG 2.1 AA 1.4.3': {
-            'suggested_text': 'Change text color from #B4B4B4 to #333333 for better contrast',
-            'confidence': 0.95,
-            'fix_type': 'color_change',
-            'old_value': '#B4B4B4',
-            'new_value': '#333333',
-            'element_xpath': '//w:p[4]/w:r[1]/w:rPr/w:color'
-        },
-        'WCAG 2.1 A 1.1.1': {
-            'suggested_text': 'Add "Annual Sales Chart" as alternative text for the referenced image',
-            'confidence': 0.85,
-            'fix_type': 'alt_text_addition',
-            'old_value': '',
-            'new_value': 'Annual Sales Chart',
-            'element_xpath': '//w:p[5]/w:r[1]/w:t'
-        },
-        'WCAG 2.1 A 1.3.1': {
-            'suggested_text': 'Add header row with "Column 1, Column 2, Column 3" to the table',
-            'confidence': 0.90,
-            'fix_type': 'table_header_addition',
-            'old_value': '',
-            'new_value': 'Column 1, Column 2, Column 3',
-            'element_xpath': '//w:tbl[1]/w:tr[1]'
-        },
-        'WCAG 2.1 A 2.4.4': {
-            'suggested_text': 'Change link text from "here" to "download the report" for better description',
-            'confidence': 0.87,
-            'fix_type': 'link_text_change',
-            'old_value': 'here',
-            'new_value': 'download the report',
-            'element_xpath': '//w:p[6]/w:r[2]/w:t'
-        },
-        'WCAG 2.1 AA 1.4.4': {
-            'suggested_text': 'Increase font size from 6pt to 12pt for better readability',
-            'confidence': 0.93,
-            'fix_type': 'font_size_change',
-            'old_value': '6pt',
-            'new_value': '12pt',
-            'element_xpath': '//w:p[7]/w:r[1]/w:rPr/w:sz'
-        }
-    }
-    
+    # Get the issue details to provide contextual suggestions
+    issue_details = issue.get('details', {})
+    original_content = issue_details.get('original_content', '')
     clause = issue['clause']
-    suggestion = suggestions.get(clause, {
-        'suggested_text': 'Manual review required for this issue type',
-        'confidence': 0.5,
-        'fix_type': 'manual_review',
-        'old_value': '',
-        'new_value': '',
-        'element_xpath': ''
-    })
     
-    return jsonify({
+    # Create suggestions based on issue clause and original content
+    suggestions = {}
+    
+    if clause == 'WCAG 2.1 AA 1.4.3' and 'Sample Document' in original_content:
+        # Title contrast issue
+        suggestions = {
+            'suggested_text': 'Improve title readability by ensuring sufficient color contrast',
+            'confidence': 0.95,
+            'fix_type': 'content_improvement',
+            'old_value': original_content,
+            'new_value': 'Sample Document with Accessibility Issues (High Contrast Version)',
+            'element_xpath': issue.get('element_xpath', '')
+        }
+    elif clause == 'WCAG 2.1 A 1.3.1' and 'paragraph that should be a heading' in original_content:
+        # Heading structure issue
+        suggestions = {
+            'suggested_text': 'Convert this paragraph to a proper heading for better document structure',
+            'confidence': 0.92,
+            'fix_type': 'heading_conversion',
+            'old_value': original_content,
+            'new_value': 'Introduction',
+            'element_xpath': issue.get('element_xpath', '')
+        }
+    elif clause == 'WCAG 2.1 A 1.3.1' and original_content == 'Subsection':
+        # Heading hierarchy issue
+        suggestions = {
+            'suggested_text': 'Improve heading hierarchy by using a more descriptive heading',
+            'confidence': 0.88,
+            'fix_type': 'heading_improvement',
+            'old_value': original_content,
+            'new_value': 'Key Features and Benefits',
+            'element_xpath': issue.get('element_xpath', '')
+        }
+    elif clause == 'WCAG 2.1 AA 1.4.3' and 'insufficient color contrast' in original_content:
+        # Body text contrast issue
+        suggestions = {
+            'suggested_text': 'Rewrite text with better contrast-friendly language and clearer messaging',
+            'confidence': 0.94,
+            'fix_type': 'content_clarity',
+            'old_value': original_content,
+            'new_value': 'This text has been optimized for excellent color contrast and readability.',
+            'element_xpath': issue.get('element_xpath', '')
+        }
+    elif clause == 'WCAG 2.1 A 1.1.1' and 'chart below' in original_content:
+        # Missing alt text issue
+        suggestions = {
+            'suggested_text': 'Add descriptive text that explains what the chart contains',
+            'confidence': 0.89,
+            'fix_type': 'descriptive_content',
+            'old_value': original_content,
+            'new_value': 'Please refer to the Annual Sales Performance Chart below, which shows quarterly revenue trends for 2023.',
+            'element_xpath': issue.get('element_xpath', '')
+        }
+    elif clause == 'WCAG 2.1 A 1.3.1' and 'Data table' in original_content:
+        # Table headers issue
+        suggestions = {
+            'suggested_text': 'Replace generic table description with proper header content',
+            'confidence': 0.91,
+            'fix_type': 'table_structure',
+            'old_value': original_content,
+            'new_value': 'Product Name | Price | Availability',
+            'element_xpath': issue.get('element_xpath', '')
+        }
+    elif clause == 'WCAG 2.1 A 2.4.4' and original_content == 'here':
+        # Link text issue
+        suggestions = {
+            'suggested_text': 'Replace vague link text with descriptive text',
+            'confidence': 0.96,
+            'fix_type': 'link_improvement',
+            'old_value': original_content,
+            'new_value': 'download the accessibility report',
+            'element_xpath': issue.get('element_xpath', '')
+        }
+    elif clause == 'WCAG 2.1 AA 1.4.4' and 'too small to read' in original_content:
+        # Font size issue
+        suggestions = {
+            'suggested_text': 'Rewrite with emphasis on readability and clear communication',
+            'confidence': 0.87,
+            'fix_type': 'readability_improvement',
+            'old_value': original_content,
+            'new_value': 'This text is now sized appropriately for easy reading and accessibility compliance.',
+            'element_xpath': issue.get('element_xpath', '')
+        }
+    else:
+        # Default fallback suggestion
+        suggestions = {
+            'suggested_text': 'Manual review and correction recommended for this accessibility issue',
+            'confidence': 0.5,
+            'fix_type': 'manual_review',
+            'old_value': original_content,
+            'new_value': original_content + ' (Please review and correct manually)',
+            'element_xpath': issue.get('element_xpath', '')
+        }
+    
+    # If no specific suggestion was created, use the suggestions object directly
+    # (since we already created it based on the clause and content)
+    suggestion = suggestions
+    
+    # Generate hardcoded DOCX snippets
+    hardcoded_snippets = get_hardcoded_snippets(issue_id, issue)
+    original_snippet = hardcoded_snippets['original'] if hardcoded_snippets else None
+    fixed_snippet = hardcoded_snippets['fixed'] if hardcoded_snippets else None
+    
+    response_data = {
         'issue_id': issue_id,
         'suggested_text': suggestion['suggested_text'],
         'confidence': suggestion['confidence'],
@@ -584,7 +615,16 @@ def suggest_fix(issue_id):
         'old_value': suggestion['old_value'],
         'new_value': suggestion['new_value'],
         'element_xpath': suggestion['element_xpath']
-    })
+    }
+    
+    # Add DOCX snippets if successfully generated
+    if original_snippet and fixed_snippet:
+        response_data['docx_snippets'] = {
+            'original': original_snippet,
+            'fixed': fixed_snippet
+        }
+    
+    return jsonify(response_data)
 
 def calculate_diff(original, new_content):
     """Calculate detailed diff between original and new content"""

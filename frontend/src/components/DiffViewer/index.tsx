@@ -6,19 +6,26 @@ import {
   Chip,
 } from '@mui/material';
 import { CompareArrows } from '@mui/icons-material';
+import { DocxSnippetViewer } from '../DocxSnippetViewer';
 
 interface DiffViewerProps {
   originalContent: string;
   newContent: string;
   title?: string;
+  docxSnippets?: {
+    original: string;
+    fixed: string;
+  };
 }
 
 export const DiffViewer: React.FC<DiffViewerProps> = ({
   originalContent,
   newContent,
   title = 'Changes Preview',
+  docxSnippets
 }) => {
   const hasChanges = originalContent !== newContent;
+  const hasDocxSnippets = docxSnippets?.original && docxSnippets?.fixed;
 
   return (
     <Paper elevation={1} sx={{ p: 2 }}>
@@ -33,9 +40,33 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
             variant="outlined"
           />
         )}
+        {hasDocxSnippets && (
+          <Chip
+            label="DOCX Preview"
+            color="info"
+            size="small"
+            variant="outlined"
+          />
+        )}
       </Box>
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+      {hasDocxSnippets ? (
+        // DOCX Snippet Preview
+        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+          <DocxSnippetViewer
+            base64Data={docxSnippets.original}
+            title="Original"
+            variant="original"
+          />
+          <DocxSnippetViewer
+            base64Data={docxSnippets.fixed}
+            title="Fixed"
+            variant="fixed"
+          />
+        </Box>
+      ) : (
+        // Text-based Preview (fallback)
+        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
         {/* Original Content */}
         <Box>
           <Typography variant="caption" color="text.secondary" gutterBottom>
@@ -76,8 +107,9 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
               {newContent || 'No content'}
             </Typography>
           </Paper>
-        </Box>
-      </Box>
+                 </Box>
+       </Box>
+      )}
 
       {!hasChanges && (
         <Box sx={{ mt: 2, textAlign: 'center' }}>

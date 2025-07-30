@@ -12,6 +12,7 @@ import {
   AccordionSummary,
   AccordionDetails,
   Grid,
+  CircularProgress,
 } from '@mui/material';
 import {
   ExpandMore,
@@ -21,12 +22,16 @@ import {
   Warning,
   Info,
   Error,
+  AutoFixHigh,
+  Visibility,
 } from '@mui/icons-material';
+import { DiffViewer } from '../DiffViewer';
+import { issuesApi } from '../../services/api';
 import type { AccessibilityIssue } from '../../types';
 
 interface IssueDetailProps {
   issue: AccessibilityIssue | null;
-  onFixSave?: (issueId: string, newContent: string) => void;
+  onFixSave?: (issueId: string, newContent: string, changeType?: 'manual' | 'suggested') => void;
 }
 
 export const IssueDetail: React.FC<IssueDetailProps> = ({
@@ -36,14 +41,54 @@ export const IssueDetail: React.FC<IssueDetailProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isLoadingSuggestion, setIsLoadingSuggestion] = useState(false);
+  const [suggestion, setSuggestion] = useState<{
+    issue_id: string;
+    suggested_text: string;
+    confidence: number;
+    fix_type: string;
+    old_value: string;
+    new_value: string;
+    element_xpath: string;
+    docx_snippets?: {
+      original: string;
+      fixed: string;
+    };
+  } | null>(null);
+  const [showDiffPreview, setShowDiffPreview] = useState(false);
 
   React.useEffect(() => {
     if (issue) {
       setEditedContent(issue.details.original_content || '');
       setIsEditing(false);
       setError(null);
+      setSuggestion(null);
+      setShowDiffPreview(false);
     }
   }, [issue]);
+
+  const handleGetSuggestion = async () => {
+    if (!issue) return;
+
+    setIsLoadingSuggestion(true);
+    setError(null);
+
+    try {
+      const suggestionData = await issuesApi.suggestFix(issue.id);
+      setSuggestion(suggestionData);
+      
+      // Set the suggested content as the edited content
+      if (suggestionData.new_value) {
+        setEditedContent(suggestionData.new_value);
+      }
+      
+      setShowDiffPreview(true);
+    } catch (err) {
+      setError(`Failed to get AI suggestion: ${err}`);
+    } finally {
+      setIsLoadingSuggestion(false);
+    }
+  };
 
   const handleEdit = () => {
     setIsEditing(true);
@@ -62,9 +107,14 @@ export const IssueDetail: React.FC<IssueDetailProps> = ({
       return;
     }
     
-    onFixSave?.(issue.id, editedContent);
+    const changeType = suggestion ? 'suggested' : 'manual';
+    onFixSave?.(issue.id, editedContent, changeType);
     setIsEditing(false);
     setError(null);
+    
+    // Reset suggestion state after saving
+    setSuggestion(null);
+    setShowDiffPreview(false);
   };
 
   const getIssueIcon = (wcagLevel: string) => {
@@ -194,7 +244,62 @@ export const IssueDetail: React.FC<IssueDetailProps> = ({
           </Alert>
         )}
 
-        {isEditing ? (
+        {/* AI Suggestion Section */}
+        {!isEditing && !suggestion && (
+          <Box sx={{ mb: 2 }}>
+            <Button
+              variant="contained"
+              color="primary"
+              size="small"
+              onClick={handleGetSuggestion}
+              disabled={isLoadingSuggestion}
+              startIcon={isLoadingSuggestion ? <CircularProgress size={16} /> : <AutoFixHigh />}
+              sx={{ mb: 2 }}
+            >
+              {isLoadingSuggestion ? 'Getting AI Suggestion...' : 'Get AI Suggestion'}
+            </Button>
+          </Box>
+        )}
+
+        {/* AI Suggestion Display */}
+        {suggestion && (
+          <Box sx={{ mb: 2 }}>
+            <Alert 
+              severity="info" 
+              sx={{ mb: 2 }}
+              action={
+                <Button
+                  color="inherit"
+                  size="small"
+                  onClick={() => setShowDiffPreview(!showDiffPreview)}
+                  startIcon={<Visibility />}
+                >
+                  {showDiffPreview ? 'Hide' : 'Show'} Diff
+                </Button>
+              }
+            >
+              <Typography variant="subtitle2" gutterBottom>
+                AI Suggestion (Confidence: {Math.round(suggestion.confidence * 100)}%)
+              </Typography>
+              <Typography variant="body2">
+                {suggestion.suggested_text}
+              </Typography>
+            </Alert>
+
+            {showDiffPreview && (
+              <Box sx={{ mb: 2 }}>
+                <DiffViewer
+                  originalContent={issue?.details.original_content || ''}
+                  newContent={editedContent}
+                  title="Suggested Changes Preview"
+                  docxSnippets={suggestion?.docx_snippets}
+                />
+              </Box>
+            )}
+          </Box>
+        )}
+
+        {isEditing || suggestion ? (
           <Box sx={{ mb: 2 }}>
             <TextField
               fullWidth
@@ -213,7 +318,7 @@ export const IssueDetail: React.FC<IssueDetailProps> = ({
                 onClick={handleSave}
                 startIcon={<Save />}
               >
-                Save Fix
+                {suggestion ? 'Stage Suggested Fix' : 'Stage Manual Fix'}
               </Button>
               <Button
                 variant="outlined"
@@ -222,6 +327,52 @@ export const IssueDetail: React.FC<IssueDetailProps> = ({
                 startIcon={<Cancel />}
               >
                 Cancel
+              </Button>
+              {suggestion && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={handleEdit}
+                  startIcon={<Edit />}
+                >
+                  Edit Suggestion
+                </Button>
+              )}
+            </Box>
+          </Box>
+        ) : suggestion ? (
+          <Box sx={{ mb: 2 }}>
+            <Paper
+              variant="outlined"
+              sx={{
+                p: 2,
+                backgroundColor: 'success.50',
+                borderColor: 'success.200',
+                minHeight: '80px',
+                display: 'flex',
+                alignItems: 'center',
+              }}
+            >
+              <Typography variant="body2" color="success.main">
+                {editedContent || 'AI suggested content ready for review'}
+              </Typography>
+            </Paper>
+            <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+              <Button
+                variant="contained"
+                size="small"
+                onClick={handleSave}
+                startIcon={<Save />}
+              >
+                Stage Suggested Fix
+              </Button>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={handleEdit}
+                startIcon={<Edit />}
+              >
+                Edit Suggestion
               </Button>
             </Box>
           </Box>
@@ -238,7 +389,7 @@ export const IssueDetail: React.FC<IssueDetailProps> = ({
               }}
             >
               <Typography variant="body2" color="text.secondary">
-                {editedContent || 'No fix content available'}
+                Click "Get AI Suggestion" to automatically generate a fix, or "Edit Fix" to create a manual fix.
               </Typography>
             </Paper>
             <Button
