@@ -25,6 +25,7 @@ export interface StagedChange {
   new_content: string;
   change_type: 'manual' | 'suggested';
   created_at: string;
+  is_fixed?: boolean;
 }
 
 export interface ApiResponse<T> {
