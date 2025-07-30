@@ -18,20 +18,29 @@ import {
   Error,
   AutoFixHigh,
 } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
 import { issuesApi } from '../../services/api';
 import type { AccessibilityIssue } from '../../types';
 
 interface IssueDetailProps {
   issue: AccessibilityIssue | null;
   onFixSave?: (issueId: string, newContent: string, changeType?: 'manual' | 'suggested') => void;
+  onDiffViewOpen?: (data: {
+    originalContent: string;
+    newContent: string;
+    title: string;
+    docxSnippets?: {
+      original: string;
+      fixed: string;
+    };
+    issueDescription?: string;
+  }) => void;
 }
 
 export const IssueDetail: React.FC<IssueDetailProps> = ({
   issue,
   onFixSave,
+  onDiffViewOpen,
 }) => {
-  const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -256,14 +265,12 @@ export const IssueDetail: React.FC<IssueDetailProps> = ({
               <Button
                 variant="outlined"
                 size="small"
-                onClick={() => navigate('/diff', {
-                  state: {
-                    originalContent: issue?.details.original_content || '',
-                    newContent: editedContent,
-                    title: 'AI Suggested Changes',
-                    docxSnippets: suggestion?.docx_snippets,
-                    issueDescription: issue?.description
-                  }
+                onClick={() => onDiffViewOpen?.({
+                  originalContent: issue?.details.original_content || '',
+                  newContent: editedContent,
+                  title: 'AI Suggested Changes',
+                  docxSnippets: suggestion?.docx_snippets,
+                  issueDescription: issue?.description
                 })}
                 sx={{ mb: 2 }}
                 fullWidth

@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import React, { useState } from 'react';
 import {
   ThemeProvider,
   CssBaseline,
@@ -9,23 +8,35 @@ import {
   Typography,
   Container,
   Grid,
+  Modal,
+  IconButton,
 } from '@mui/material';
-import { Accessibility } from '@mui/icons-material';
+import { Accessibility, Close } from '@mui/icons-material';
 import { theme } from './theme';
 import { DocumentUploader } from './components/DocumentUploader';
 import { DocumentViewer } from './components/DocumentViewer';
 import { IssuePanel } from './components/IssuePanel';
 import { IssueDetail } from './components/IssueDetail';
 import { StagedChangesBar } from './components/StagedChangesBar';
-import { DiffView } from './components/DiffView';
+import { DocxSnippetViewer } from './components/DocxSnippetViewer';
 import { issuesApi, changesApi } from './services/api';
 import type { Document, AccessibilityIssue, StagedChange } from './types';
 
-const MainApp: React.FC = () => {
+function App() {
   const [currentDocument, setCurrentDocument] = useState<Document | null>(null);
   const [selectedIssue, setSelectedIssue] = useState<AccessibilityIssue | null>(null);
   const [stagedChanges, setStagedChanges] = useState<StagedChange[]>([]);
   const [isApplyingChanges, setIsApplyingChanges] = useState(false);
+  const [diffViewData, setDiffViewData] = useState<{
+    originalContent: string;
+    newContent: string;
+    title: string;
+    docxSnippets?: {
+      original: string;
+      fixed: string;
+    };
+    issueDescription?: string;
+  } | null>(null);
 
   const handleDocumentUploaded = (document: Document) => {
     setCurrentDocument(document);
@@ -132,6 +143,8 @@ const MainApp: React.FC = () => {
   };
 
   return (
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
       <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
         {/* App Bar */}
         <AppBar position="static">
@@ -184,6 +197,7 @@ const MainApp: React.FC = () => {
                 <IssueDetail
                   issue={selectedIssue}
                   onFixSave={handleFixSave}
+                  onDiffViewOpen={setDiffViewData}
                 />
               </Grid>
             </Grid>
@@ -198,22 +212,187 @@ const MainApp: React.FC = () => {
           onRemoveChange={handleRemoveChange}
           isApplying={isApplyingChanges}
         />
-      </Box>
-  );
-};
 
-function App() {
-  return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <Router>
-        <Routes>
-          <Route path="/" element={<MainApp />} />
-          <Route path="/diff" element={<DiffView />} />
-        </Routes>
-      </Router>
+        {/* Diff View Overlay */}
+        {diffViewData && (
+          <DiffViewOverlay
+            data={diffViewData}
+            onClose={() => setDiffViewData(null)}
+          />
+        )}
+      </Box>
     </ThemeProvider>
   );
 }
+
+// Diff View Overlay Component
+interface DiffViewOverlayProps {
+  data: {
+    originalContent: string;
+    newContent: string;
+    title: string;
+    docxSnippets?: {
+      original: string;
+      fixed: string;
+    };
+    issueDescription?: string;
+  };
+  onClose: () => void;
+}
+
+const DiffViewOverlay: React.FC<DiffViewOverlayProps> = ({ data, onClose }) => {
+  return (
+    <Modal
+      open={true}
+      onClose={onClose}
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <Box
+        sx={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          bgcolor: 'background.paper',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Header */}
+        <AppBar position="static" color="default" elevation={1}>
+          <Toolbar>
+            <IconButton
+              edge="start"
+              onClick={onClose}
+              sx={{ mr: 2 }}
+            >
+              <Close />
+            </IconButton>
+            <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+              {data.title}
+            </Typography>
+          </Toolbar>
+        </AppBar>
+
+        {/* Content */}
+        <Container maxWidth="xl" sx={{ py: 3, height: 'calc(100vh - 64px)', overflow: 'hidden' }}>
+          {/* Issue Information */}
+          {data.issueDescription && (
+            <Box sx={{ mb: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+              <Typography variant="subtitle2" gutterBottom>
+                Issue Details
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {data.issueDescription}
+              </Typography>
+            </Box>
+          )}
+
+          {/* Side-by-side Comparison */}
+          <Box
+            sx={{
+              display: 'flex',
+              height: data.issueDescription ? 'calc(100vh - 200px)' : 'calc(100vh - 140px)',
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: 1,
+              overflow: 'hidden',
+            }}
+          >
+            {/* Original Content */}
+            <Box sx={{ width: '50%', display: 'flex', flexDirection: 'column' }}>
+              <Box
+                sx={{
+                  p: 2,
+                  backgroundColor: 'error.50',
+                  borderBottom: 1,
+                  borderColor: 'error.200',
+                }}
+              >
+                <Typography variant="h6" color="error.main">
+                  Original
+                </Typography>
+              </Box>
+              <Box sx={{ flex: 1, p: 1, overflow: 'auto', backgroundColor: 'error.25' }}>
+                {data.docxSnippets ? (
+                  <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                    <DocxSnippetViewer
+                      base64Data={data.docxSnippets.original}
+                      title=""
+                      variant="original"
+                      compact={false}
+                    />
+                  </Box>
+                ) : (
+                  <Typography
+                    variant="body1"
+                    sx={{
+                      whiteSpace: 'pre-wrap',
+                      fontFamily: 'monospace',
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    {data.originalContent || 'No content'}
+                  </Typography>
+                )}
+              </Box>
+            </Box>
+
+            {/* Vertical Divider */}
+            <Box
+              sx={{
+                width: '2px',
+                backgroundColor: 'grey.400',
+              }}
+            />
+
+            {/* Fixed Content */}
+            <Box sx={{ width: '50%', display: 'flex', flexDirection: 'column' }}>
+              <Box
+                sx={{
+                  p: 2,
+                  backgroundColor: 'success.50',
+                  borderBottom: 1,
+                  borderColor: 'success.200',
+                }}
+              >
+                <Typography variant="h6" color="success.main">
+                  Fixed
+                </Typography>
+              </Box>
+              <Box sx={{ flex: 1, p: 1, overflow: 'auto', backgroundColor: 'success.25' }}>
+                {data.docxSnippets ? (
+                  <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                    <DocxSnippetViewer
+                      base64Data={data.docxSnippets.fixed}
+                      title=""
+                      variant="fixed"
+                      compact={false}
+                    />
+                  </Box>
+                ) : (
+                  <Typography
+                    variant="body1"
+                    sx={{
+                      whiteSpace: 'pre-wrap',
+                      fontFamily: 'monospace',
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    {data.newContent || 'No content'}
+                  </Typography>
+                )}
+              </Box>
+            </Box>
+          </Box>
+        </Container>
+      </Box>
+    </Modal>
+  );
+};
 
 export default App;
