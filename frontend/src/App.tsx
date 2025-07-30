@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import {
   ThemeProvider,
   CssBaseline,
@@ -16,10 +17,11 @@ import { DocumentViewer } from './components/DocumentViewer';
 import { IssuePanel } from './components/IssuePanel';
 import { IssueDetail } from './components/IssueDetail';
 import { StagedChangesBar } from './components/StagedChangesBar';
+import { DiffView } from './components/DiffView';
 import { issuesApi, changesApi } from './services/api';
 import type { Document, AccessibilityIssue, StagedChange } from './types';
 
-function App() {
+const MainApp: React.FC = () => {
   const [currentDocument, setCurrentDocument] = useState<Document | null>(null);
   const [selectedIssue, setSelectedIssue] = useState<AccessibilityIssue | null>(null);
   const [stagedChanges, setStagedChanges] = useState<StagedChange[]>([]);
@@ -130,8 +132,6 @@ function App() {
   };
 
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
       <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
         {/* App Bar */}
         <AppBar position="static">
@@ -199,6 +199,19 @@ function App() {
           isApplying={isApplyingChanges}
         />
       </Box>
+  );
+};
+
+function App() {
+  return (
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Router>
+        <Routes>
+          <Route path="/" element={<MainApp />} />
+          <Route path="/diff" element={<DiffView />} />
+        </Routes>
+      </Router>
     </ThemeProvider>
   );
 }

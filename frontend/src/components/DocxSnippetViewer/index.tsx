@@ -6,12 +6,14 @@ interface DocxSnippetViewerProps {
   base64Data: string;
   title: string;
   variant?: 'original' | 'fixed';
+  compact?: boolean;
 }
 
 export const DocxSnippetViewer: React.FC<DocxSnippetViewerProps> = ({
   base64Data,
   title,
-  variant = 'original'
+  variant = 'original',
+  compact = false
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -76,18 +78,25 @@ export const DocxSnippetViewer: React.FC<DocxSnippetViewerProps> = ({
   };
 
   return (
-    <Box>
-      <Typography variant="caption" color="text.secondary" gutterBottom>
-        {title}
-      </Typography>
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {title && (
+        <Typography variant="caption" color="text.secondary" gutterBottom>
+          {title}
+        </Typography>
+      )}
       <Paper
         variant="outlined"
         sx={{
-          p: 2,
+          flex: 1,
+          p: compact ? 0.5 : 2,
           backgroundColor: getBackgroundColor(),
           borderColor: getBorderColor(),
-          minHeight: '120px',
-          position: 'relative'
+          minHeight: compact ? '40px' : '200px',
+          maxHeight: compact ? '100px' : undefined,
+          position: 'relative',
+          overflow: 'auto',
+          display: 'flex',
+          flexDirection: 'column'
         }}
       >
         {isLoading && (
@@ -95,9 +104,9 @@ export const DocxSnippetViewer: React.FC<DocxSnippetViewerProps> = ({
             display: 'flex', 
             justifyContent: 'center', 
             alignItems: 'center', 
-            height: '80px' 
+            height: compact ? '30px' : '80px'
           }}>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant={compact ? "caption" : "body2"} color="text.secondary">
               Rendering {title.toLowerCase()}...
             </Typography>
           </Box>
@@ -112,28 +121,31 @@ export const DocxSnippetViewer: React.FC<DocxSnippetViewerProps> = ({
         <Box
           ref={containerRef}
           sx={{
+            flex: 1,
+            overflow: 'auto',
             '& .docx-wrapper': {
               fontFamily: 'inherit',
-              lineHeight: 1.4,
-              fontSize: '0.875rem'
+              lineHeight: compact ? 1.2 : 1.4,
+              fontSize: compact ? '0.65rem' : '0.875rem'
             },
             '& h1, & h2, & h3, & h4, & h5, & h6': {
-              margin: '0.5rem 0',
+              margin: compact ? '0.2rem 0' : '0.5rem 0',
               fontWeight: 600,
+              fontSize: compact ? '0.7rem' : undefined,
             },
             '& p': {
-              margin: '0.25rem 0',
-              lineHeight: 1.4,
+              margin: compact ? '0.1rem 0' : '0.25rem 0',
+              lineHeight: compact ? 1.2 : 1.4,
             },
             '& table': {
               borderCollapse: 'collapse',
               width: '100%',
-              fontSize: '0.75rem'
+              fontSize: compact ? '0.6rem' : '0.75rem'
             },
             '& th, & td': {
               border: '1px solid',
               borderColor: 'divider',
-              padding: '0.25rem',
+              padding: compact ? '0.1rem' : '0.25rem',
             },
             '& th': {
               backgroundColor: 'grey.100',
