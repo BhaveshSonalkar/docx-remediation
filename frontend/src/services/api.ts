@@ -79,7 +79,7 @@ export const issuesApi = {
   },
 
   // Stage a change for an issue
-  stageChange: async (issueId: string, newContent: string, changeType: 'manual' | 'suggested' = 'manual'): Promise<{
+  stageChange: async (issueId: string, newContent: string, changeType: 'manual' | 'suggested' = 'manual', fixedSnippet?: string | null): Promise<{
     change_id: string;
     issue_id: string;
     document_id: string;
@@ -107,7 +107,8 @@ export const issuesApi = {
   }> => {
     const response = await api.post(`/issues/${issueId}/stage-change`, {
       new_content: newContent,
-      change_type: changeType
+      change_type: changeType,
+      fixed_snippet: fixedSnippet
     });
     return response.data;
   },
@@ -169,6 +170,11 @@ export const changesApi = {
     message: string;
   }> => {
     const payload = changeIds ? { change_ids: changeIds } : {};
+    console.log('DEBUG: API applyChanges called with:');
+    console.log('DEBUG: - documentId:', documentId);
+    console.log('DEBUG: - changeIds:', changeIds);
+    console.log('DEBUG: - payload:', payload);
+    
     const response = await api.post(`/documents/${documentId}/apply-changes`, payload);
     return response.data;
   },

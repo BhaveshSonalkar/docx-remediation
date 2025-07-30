@@ -48,13 +48,13 @@ function App() {
     setSelectedIssue(issue);
   };
 
-  const handleFixSave = async (issueId: string, newContent: string, changeType: 'manual' | 'suggested' = 'manual') => {
+  const handleFixSave = async (issueId: string, newContent: string, changeType: 'manual' | 'suggested' = 'manual', fixedSnippet?: string | null) => {
     const issue = selectedIssue;
     if (!issue || !currentDocument) return;
 
     try {
-      // Stage the change with the backend
-      const stagedChange = await issuesApi.stageChange(issueId, newContent, changeType);
+      // Stage the change with the backend, including the fixed snippet for proper formatting
+      const stagedChange = await issuesApi.stageChange(issueId, newContent, changeType, fixedSnippet);
       
       // Create local staged change object
       const change: StagedChange = {
@@ -66,7 +66,14 @@ function App() {
         created_at: stagedChange.created_at,
       };
 
-      setStagedChanges(prev => [...prev, change]);
+      console.log('DEBUG: Staging change with ID:', stagedChange.change_id);
+      console.log('DEBUG: Local change object:', change);
+      
+      setStagedChanges(prev => {
+        const newStagedChanges = [...prev, change];
+        console.log('DEBUG: Updated staged changes:', newStagedChanges);
+        return newStagedChanges;
+      });
       
       // Show success feedback (optional)
       console.log('Change staged successfully:', stagedChange);
@@ -83,8 +90,20 @@ function App() {
     setIsApplyingChanges(true);
     
     try {
+      // Get the IDs of all staged changes to apply
+      const changeIds = stagedChanges.map(change => change.id);
+      console.log('DEBUG: Current staged changes:', stagedChanges);
+      console.log('DEBUG: Extracted change IDs:', changeIds);
+      console.log('DEBUG: Document ID:', currentDocument.id);
+      
+      if (changeIds.length === 0) {
+        console.warn('No staged changes to apply!');
+        setIsApplyingChanges(false);
+        return;
+      }
+      
       // Apply all staged changes to the document
-      const result = await changesApi.applyChanges(currentDocument.id);
+      const result = await changesApi.applyChanges(currentDocument.id, changeIds);
       
       if (result.success) {
         // Clear staged changes on successful application

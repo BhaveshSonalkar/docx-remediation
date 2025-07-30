@@ -23,7 +23,7 @@ import type { AccessibilityIssue } from '../../types';
 
 interface IssueDetailProps {
   issue: AccessibilityIssue | null;
-  onFixSave?: (issueId: string, newContent: string, changeType?: 'manual' | 'suggested') => void;
+  onFixSave?: (issueId: string, newContent: string, changeType?: 'manual' | 'suggested', fixedSnippet?: string | null) => void;
   onDiffViewOpen?: (data: {
     originalContent: string;
     newContent: string;
@@ -105,7 +105,9 @@ export const IssueDetail: React.FC<IssueDetailProps> = ({
     if (!issue || !editedContent.trim()) return;
 
     const changeType = suggestion ? 'suggested' : 'manual';
-    onFixSave?.(issue.id, editedContent, changeType);
+    // Pass the fixed DOCX snippet if available for proper formatting
+    const fixedSnippet = suggestion?.docx_snippets?.fixed || null;
+    onFixSave?.(issue.id, editedContent, changeType, fixedSnippet);
     setIsEditing(false);
     setSuggestion(null);
   };
